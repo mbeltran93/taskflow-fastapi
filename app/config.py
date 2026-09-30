@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = (
-        "postgresql+psycopg://taskflow:taskflow@localhost:5432/taskflow"
+        "postgresql+psycopg://taskflow:taskflow@localhost:5434/taskflow"
     )
 
     # Auth
