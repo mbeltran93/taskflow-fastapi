@@ -1,5 +1,7 @@
 # TaskFlow API (FastAPI)
 
+[![CI](https://github.com/mbeltran93/taskflow-fastapi/actions/workflows/ci.yml/badge.svg)](https://github.com/mbeltran93/taskflow-fastapi/actions/workflows/ci.yml)
+
 A small, portfolio-sized clone of a Trello/Jira-style task manager: **users**
 own **projects**, and projects contain **tasks** that move through
 `TODO -> IN_PROGRESS -> DONE`.
