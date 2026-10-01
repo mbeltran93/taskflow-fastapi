@@ -1,0 +1,267 @@
+{
+  "info": {
+    "name": "TaskFlow API",
+    "description": "End-to-end flow for the TaskFlow FastAPI portfolio project: register, log in, create a project and a task, list/filter tasks, update status, and two negative cases (missing token -> 401, unknown resource -> 404).\n\nRun the whole collection top to bottom with the Postman Runner, or step through requests one by one. The bearer token returned by \"Login\" is captured automatically into the `token` collection variable by that request's Tests script, and every authenticated request below reuses it via `Authorization: Bearer {{token}}` -- no manual copy/paste needed.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000", "type": "string" },
+    { "key": "userEmail", "value": "", "type": "string" },
+    { "key": "userPassword", "value": "supersecret123", "type": "string" },
+    { "key": "token", "value": "", "type": "string" },
+    { "key": "projectId", "value": "", "type": "string" },
+    { "key": "taskId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "0. Health check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "pm.test('reports ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Register user",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// Unique email per run so the collection can be re-run without hitting 409 Conflict.",
+              "pm.collectionVariables.set('userEmail', `ada.${Date.now()}@example.com`);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status is 201', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('returns the created user', () => {",
+              "    pm.expect(body).to.have.property('id');",
+              "    pm.expect(body.email).to.eql(pm.collectionVariables.get('userEmail'));",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Ada Lovelace\",\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api", "users"] }
+      }
+    },
+    {
+      "name": "2. Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('returns a bearer token', () => {",
+              "    pm.expect(body).to.have.property('token');",
+              "    pm.expect(body.token_type).to.eql('bearer');",
+              "});",
+              "// Save the token so every later request's Authorization header picks it up automatically.",
+              "pm.collectionVariables.set('token', body.token);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+      }
+    },
+    {
+      "name": "3. Create project",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status is 201', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('returns the created project', () => {",
+              "    pm.expect(body).to.have.property('id');",
+              "    pm.expect(body.name).to.eql('Website Redesign');",
+              "});",
+              "pm.collectionVariables.set('projectId', body.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Website Redesign\",\n  \"description\": \"Revamp the marketing site\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/projects", "host": ["{{baseUrl}}"], "path": ["api", "projects"] }
+      }
+    },
+    {
+      "name": "4. Create task",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status is 201', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('task is linked to the project and starts as TODO', () => {",
+              "    pm.expect(body).to.have.property('id');",
+              "    pm.expect(body.project_id).to.eql(pm.collectionVariables.get('projectId'));",
+              "    pm.expect(body.status).to.eql('TODO');",
+              "});",
+              "pm.collectionVariables.set('taskId', body.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Write the API docs\",\n  \"description\": \"Document every endpoint in the README\",\n  \"project_id\": \"{{projectId}}\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/tasks", "host": ["{{baseUrl}}"], "path": ["api", "tasks"] }
+      }
+    },
+    {
+      "name": "5. List tasks filtered by project + status",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('only returns matching tasks', () => {",
+              "    pm.expect(body).to.be.an('array').that.is.not.empty;",
+              "    body.forEach((task) => {",
+              "        pm.expect(task.project_id).to.eql(pm.collectionVariables.get('projectId'));",
+              "        pm.expect(task.status).to.eql('TODO');",
+              "    });",
+              "});",
+              "pm.test('the task created earlier is in the list', () => {",
+              "    pm.expect(body.map((t) => t.id)).to.include(pm.collectionVariables.get('taskId'));",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/tasks?projectId={{projectId}}&status=TODO",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "tasks"],
+          "query": [
+            { "key": "projectId", "value": "{{projectId}}" },
+            { "key": "status", "value": "TODO" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "6. Update task status",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('task moved to IN_PROGRESS', () => pm.expect(body.status).to.eql('IN_PROGRESS'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }] },
+        "body": { "mode": "raw", "raw": "{\n  \"status\": \"IN_PROGRESS\"\n}" },
+        "url": {
+          "raw": "{{baseUrl}}/api/tasks/{{taskId}}/status",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "tasks", "{{taskId}}", "status"]
+        }
+      }
+    },
+    {
+      "name": "7. Create project without token -> 401",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status is 401 Unauthorized', () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Should be rejected\",\n  \"description\": \"No Authorization header was sent\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/projects", "host": ["{{baseUrl}}"], "path": ["api", "projects"] }
+      }
+    },
+    {
+      "name": "8. Get unknown task -> 404",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status is 404 Not Found', () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/tasks/00000000-0000-0000-0000-000000000000",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "tasks", "00000000-0000-0000-0000-000000000000"]
+        }
+      }
+    }
+  ]
+}

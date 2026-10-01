@@ -84,8 +84,9 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-Tests run against an in-memory SQLite database (schema created/dropped per
-test), so they don't require Postgres or Docker to be running. They cover:
+Most tests run against an in-memory SQLite database (schema created/dropped
+per test), so they don't require Postgres or Docker to be running. They
+cover:
 
 - registration + login, wrong password / unknown user (`401`)
 - duplicate registration (`409`)
@@ -93,6 +94,26 @@ test), so they don't require Postgres or Docker to be running. They cover:
 - project CRUD (create/list/get/update/delete) and 404 on unknown id
 - task CRUD, filtering by `projectId`/`status`, the `PATCH /status` endpoint,
   and 404s for unknown project/task
+
+### Real-Postgres integration tests
+
+`tests/test_postgres_integration.py` spins up a disposable Postgres
+container with [Testcontainers](https://testcontainers-python.readthedocs.io/),
+runs the project's real Alembic migrations against it, and drives the app
+through `httpx` exactly like the SQLite tests above -- but against a real
+database engine. This covers things the SQLite suite structurally can't:
+
+- the Alembic migration actually applying cleanly to Postgres,
+- the native Postgres `UUID` column path of the cross-dialect `GUID` type
+  (SQLite only ever exercises the `CHAR(32)` fallback),
+- real foreign-key enforcement: deleting a project cascades to its tasks
+  (`ON DELETE CASCADE`), and deleting a user nulls out `assignee_id` on their
+  tasks (`ON DELETE SET NULL`) -- SQLite doesn't enforce FKs by default, so
+  this is otherwise untested.
+
+These tests need Docker running locally (same requirement as `docker compose
+up`) and are automatically **skipped** if a container can't be started, so
+`pytest` still passes on a machine without Docker.
 
 ## Trying it with curl
 
@@ -118,6 +139,39 @@ curl -s -X POST http://localhost:8000/api/tasks \
   -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
   -d "{\"title\": \"Write the API docs\", \"project_id\": \"$PROJECT_ID\"}"
 ```
+
+## Trying it with Postman
+
+[`postman_collection.json`](postman_collection.json) has the same flow as the
+curl walkthrough above, plus a couple of negative cases, as a ready-to-run
+Postman collection:
+
+1. register a user
+2. log in
+3. create a project
+4. create a task
+5. list tasks filtered by `projectId`/`status`
+6. update a task's status
+7. call a write endpoint without a token (expects `401`)
+8. fetch an unknown task id (expects `404`)
+
+To import it:
+
+1. Open Postman -> **Import** -> select `postman_collection.json` (or drag
+   it into the app).
+2. The collection ships with a `baseUrl` variable defaulting to
+   `http://localhost:8000`, so it works out of the box against either
+   `docker compose up` or the local `uvicorn --reload` setup -- edit the
+   collection's variables if your API runs elsewhere.
+3. Run requests in order (or use **Runner** to run the whole collection
+   top to bottom). The "Login" request's Tests script saves the returned
+   JWT into the `token` collection variable automatically, and every
+   authenticated request after it reads that variable via
+   `Authorization: Bearer {{token}}` -- no manual copy/paste needed. The
+   "Register user" request similarly generates a unique email per run (so
+   the collection can be re-run without hitting `409 Conflict`), and
+   "Create project"/"Create task" save the created ids for the requests
+   that depend on them.
 
 ## API endpoints
 
